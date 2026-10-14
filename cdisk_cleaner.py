@@ -21,7 +21,7 @@ C 盘垃圾清理器
 
 """
 
-__version__ = "1.2.2"
+__version__ = "1.3.0"
 __author__ = "柯夜"
 __author_id__ = "sickpoet"
 __copyright__ = "Copyright (C) 2026 柯夜 (sickpoet). 保留所有权利。"
@@ -1076,6 +1076,142 @@ class NeonRadio(object):
                             font=(FONT_UI, 9))
 
 
+class NeonProgress(object):
+    """
+    赛博朋克进度条：6px 细槽 + 霓虹填充，determinate / indeterminate 两种模式。
+
+    用 Canvas 而不是 ttk.Progressbar：clam 主题下 ttk 进度条固定 18px 高
+    （thickness 被忽略，实测三种取值 reqheight 都是 18），塞进日志与状态条
+    之间太蠢；而且填充色、提亮、滚动动画都自己画才精确。
+    接口对齐 NeonButton：组合而非继承，转发 pack/grid/place 即可当普通控件用。
+
+    用法：
+        p = NeonProgress(body)
+        p.start(CYAN, True, 30)   # 已知 30 步，按步填充
+        p.step()                  # 完成一步
+        p.start(CYAN, False, 0)   # 总数未知，滚动动画
+        p.stop()                  # 结束：停动画、归零
+    """
+
+    H = 6          # 槽高（px）
+    TICK = 30      # 滚动动画帧间隔（ms）
+    SPEED = 0.045  # 滚动动画每帧推进的相位
+
+    def __init__(self, master, color=CYAN):
+        self._color = color
+        self._value = 0.0
+        self._maximum = 100.0
+        self._determinate = True
+        self._running = False
+        self._anim = 0.0
+        self._dir = 1
+        self._anim_id = None
+        self._w = 0
+
+        self.cv = tk.Canvas(master, height=self.H, bg=BG,
+                            highlightthickness=0, bd=0)
+        self.cv.bind("<Configure>", self._on_resize)
+        self._draw()
+
+    # -------- 布局转发
+    def pack(self, **kw):
+        self.cv.pack(**kw)
+        return self
+
+    def grid(self, **kw):
+        self.cv.grid(**kw)
+
+    def place(self, **kw):
+        self.cv.place(**kw)
+
+    # -------- 对外接口
+    def start(self, color, determinate, total):
+        """开始一段任务进度。determinate=False 时忽略 total，走滚动动画。"""
+        self._cancel_anim()
+        self._color = color
+        self._determinate = bool(determinate)
+        self._maximum = max(float(total), 1.0) if determinate else 100.0
+        self._value = 0.0
+        self._anim = 0.0
+        self._dir = 1
+        self._running = True
+        if not self._determinate:
+            self._kick()
+        self._draw()
+
+    def step(self, amount=1):
+        """determinate 模式前进 amount 步，封顶在 maximum。"""
+        if not self._determinate or not self._running:
+            return
+        self._value = min(self._value + amount, self._maximum)
+        self._draw()
+
+    def stop(self):
+        """结束：停动画、归零。"""
+        self._running = False
+        self._cancel_anim()
+        self._value = 0.0
+        self._anim = 0.0
+        self._draw()
+
+    # -------- 滚动动画
+    def _kick(self):
+        if not self._running or self._determinate:
+            self._anim_id = None
+            return
+        self._anim += self.SPEED * self._dir
+        if self._anim >= 1.0:
+            self._anim, self._dir = 1.0, -1
+        elif self._anim <= 0.0:
+            self._anim, self._dir = 0.0, 1
+        self._draw()
+        self._anim_id = self.cv.after(self.TICK, self._kick)
+
+    def _cancel_anim(self):
+        if self._anim_id is not None:
+            try:
+                self.cv.after_cancel(self._anim_id)
+            except Exception:
+                pass
+            self._anim_id = None
+
+    # -------- 绘制
+    def _on_resize(self, event):
+        if abs(event.width - self._w) < 1:
+            return
+        self._w = event.width
+        self._draw()
+
+    def _draw(self):
+        self.cv.delete("all")
+        w = self._w
+        if w < 8:
+            return
+        h = self.H
+        # 槽：深色底 + 1px 细边，勾出插槽
+        self.cv.create_rectangle(0, 0, w - 1, h - 1, fill=BG_DEEP,
+                                 outline=BORDER, width=1)
+        if self._determinate:
+            frac = min(self._value / self._maximum, 1.0)
+            x1 = 1 + int((w - 2) * frac)
+            if x1 > 1:
+                self._fill(1, x1)
+        else:
+            bw = max(int(w * 0.22), 24)
+            span = (w - 2) - bw
+            if span <= 0:
+                return
+            x0 = 1 + int(span * self._anim)
+            self._fill(x0, x0 + bw)
+
+    def _fill(self, x0, x1):
+        h = self.H
+        self.cv.create_rectangle(x0, 1, x1, h - 2, fill=self._color,
+                                 outline="")
+        # 顶端 1px 提亮，模拟灯管反光
+        self.cv.create_line(x0, 1, x1, 1, fill=_mix(self._color, 1.7))
+
+
 def _set_window_icon(root):
     """换掉窗口与任务栏图标。打包后资源解压在 _MEIPASS 里。"""
     for base in (getattr(sys, "_MEIPASS", None),
@@ -1360,6 +1496,7 @@ class CleanerApp(object):
                    font=(FONT_EN, 9, "bold")).pack(side="right", padx=(0, 6))
 
         logf = tk.Frame(body, bg=BG)
+        self.logf = logf
         self.log_text = tk.Text(
             logf, height=8, wrap="none", font=(FONT_EN, 9),
             bg=BG_DEEP, fg=TEXT, insertbackground=CYAN, relief="flat",
@@ -1389,6 +1526,10 @@ class CleanerApp(object):
             padx=10, pady=6, cursor="hand2")
         self._sign.pack(side="right")
         self._sign.bind("<Button-1>", lambda _e: self._show_about())
+
+        # --- 进度条：常驻但不常亮，平时收起，只在扫描/清理时插到状态条
+        # 上方（插入位置见 _progress_show）
+        self.pbar = NeonProgress(body, color=CYAN)
 
         # --- 布局顺序：pack 按调用顺序分配空间，先来的先拿到固定高度。
         # 日志与状态条用 side="bottom" 自下而上贴边，Notebook 最后 pack 吃剩余空间。
@@ -2098,6 +2239,50 @@ class CleanerApp(object):
             "disabled" if self.busy or not (sel or self.empty_checked)
             else "normal")
 
+    # ---------------- 进度条 ----------------
+    #
+    # NeonProgress 常驻但不常亮：平时 pack_forget 收起，任务开始时插回
+    # 日志与状态条之间，结束再收起。重新插入不能靠默认 pack 顺序——
+    # pack_forget 之后再 pack 会排到 Notebook 脚下去，必须用
+    # before=self.logf 指定插入点。
+
+    def _progress_show(self):
+        try:
+            self.pbar.pack(side="bottom", fill="x", pady=(6, 0),
+                           before=self.logf)
+        except Exception:
+            pass
+
+    def _progress_hide(self):
+        try:
+            self.pbar.stop()
+        except Exception:
+            pass
+        try:
+            self.pbar.cv.pack_forget()
+        except Exception:
+            pass
+
+    def _progress_start(self, color, determinate, total):
+        """
+        开始一段任务进度。
+
+        color        CYAN（扫描，只读）或 MAGENTA（清理，有破坏性）
+        determinate  True  = 已知总步数，按步填充；False = 滚动动画
+        total        determinate 时的总步数
+        """
+        try:
+            self.pbar.start(color, determinate, total)
+            self._progress_show()
+        except Exception:
+            pass
+
+    def _progress_step(self, amount=1):
+        try:
+            self.pbar.step(amount)
+        except Exception:
+            pass
+
     # ---------------- 扫描 ----------------
 
     def _set_busy(self, busy):
@@ -2109,6 +2294,10 @@ class CleanerApp(object):
         self.btn_clean.set_state(
             "disabled" if busy or not (self._selected_targets()
                                        or self.empty_checked) else "normal")
+        if not busy:
+            # 任务结束（含取消、失败）统一在这里收进度条，
+            # 免得每条完成路径各写一遍
+            self._progress_hide()
         self._touch_status_accent(busy)
 
     def _touch_status_accent(self, busy):
@@ -2133,10 +2322,15 @@ class CleanerApp(object):
                     self.msgq.put(("row", t))
                     self.msgq.put(("status", "已扫描：%s — %s"
                                    % (t.label, human_size(t.size))))
+                    self.msgq.put(("pstep", None))
 
                 # 回收站统计偏慢，单独开线程，别拖住其他不到一秒的项目
                 rb_targets = [t for t in self.targets if t.mode == "recyclebin"]
                 others = [t for t in self.targets if t.mode != "recyclebin"]
+
+                # 扫描步数已知：每个目标算一步，回收站另算一步
+                self.msgq.put(("pstart", (CYAN, True,
+                                          len(others) + (1 if rb_targets else 0))))
 
                 if rb_targets:
                     self.msgq.put(("status", "正在统计回收站 ..."))
@@ -2151,6 +2345,7 @@ class CleanerApp(object):
                                 self.msgq.put(("row", t))
                             except Exception:  # noqa: BLE001
                                 pass
+                        self.msgq.put(("pstep", None))
                         self.msgq.put(("rb_done", None))
 
                     threading.Thread(target=rb_work, daemon=True).start()
@@ -2172,6 +2367,8 @@ class CleanerApp(object):
 
         def work():
             try:
+                # 空目录总数未知（边遍历边发现），只能给滚动动画
+                self.msgq.put(("pstart", (CYAN, False, 0)))
                 found = scan_empty_dirs(
                     progress=lambda n: self.msgq.put(
                         ("status", "已找到 %d 个空文件夹 ..." % n)),
@@ -2216,6 +2413,9 @@ class CleanerApp(object):
 
         self._set_busy(True)
         self.cancel.clear()
+        # 清理步数 = 勾选的目标数 + 勾选的空目录数，一个目标算一步
+        self.msgq.put(("pstart", (MAGENTA, True,
+                                  len(sel) + len(empty_sel))))
 
         def work():
             cleared = []
@@ -2233,9 +2433,11 @@ class CleanerApp(object):
                 self.msgq.put(("log", "  → 释放 %s，处理 %d 个文件%s"
                                % (human_size(b), f,
                                   ("，%d 项未成功" % e) if e else "")))
+                self.msgq.put(("pstep", "正在清理：%s" % t.label))
 
             if empty_sel and not self.cancel.is_set():
                 self.msgq.put(("log", "清理空文件夹 %d 个" % len(empty_sel)))
+                self.msgq.put(("status", "正在清理空文件夹 ..."))
                 for d in empty_sel:
                     if self.cancel.is_set():
                         break
@@ -2246,6 +2448,7 @@ class CleanerApp(object):
                     except GuardError as exc:
                         failed += 1
                         self.msgq.put(("log", "  [拒绝] %s" % exc))
+                        self.msgq.put(("pstep", None))
                         continue
                     try:
                         if os.path.isdir(d) and is_empty_dir(d):
@@ -2254,6 +2457,7 @@ class CleanerApp(object):
                     except OSError as exc:
                         failed += 1
                         self.msgq.put(("log", "  [失败] %s：%s" % (d, exc)))
+                    self.msgq.put(("pstep", None))
 
             self.msgq.put(("clean_done", (freed, files, failed, cleared)))
 
@@ -2272,6 +2476,13 @@ class CleanerApp(object):
                     self.log(payload)
                 elif kind == "status":
                     self.set_status(payload)
+                elif kind == "pstart":
+                    color, determinate, total = payload
+                    self._progress_start(color, determinate, total)
+                elif kind == "pstep":
+                    if payload:
+                        self.set_status(payload)
+                    self._progress_step()
                 elif kind == "row":
                     self._refresh_row(payload)
                 elif kind == "scan_done":

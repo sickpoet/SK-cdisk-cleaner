@@ -295,6 +295,31 @@ try:
           app.head.itemcget(app._drive_item, "text"))
     app._tick_blink()
     check("闪烁动画未报错", True)
+
+    # ---- 进度条
+    app._progress_start(C.CYAN, True, 4)
+    check("进度条 determinate 起步", app.pbar._determinate is True)
+    check("进度条总步数已设", app.pbar._maximum == 4, app.pbar._maximum)
+    check("进度条初始为 0", app.pbar._value == 0, app.pbar._value)
+    check("进度条已显示", bool(app.pbar.cv.winfo_manager()),
+          app.pbar.cv.winfo_manager())
+    app._progress_step()
+    check("进度条可步进", app.pbar._value == 1, app.pbar._value)
+    app._progress_start(C.CYAN, False, 0)
+    check("空目录扫描切滚动动画",
+          app.pbar._determinate is False and app.pbar._running is True)
+    root.update()
+    check("进度条排在状态条上方",
+          app.pbar.cv.winfo_rooty() < app.status.winfo_rooty(),
+          (app.pbar.cv.winfo_rooty(), app.status.winfo_rooty()))
+    app._set_busy(True)
+    app._progress_hide()
+    check("收起后不占布局", not app.pbar.cv.winfo_manager(),
+          app.pbar.cv.winfo_manager())
+    check("收起后动画停止", app.pbar._running is False)
+    app._set_busy(False)
+    check("任务结束自动收进度条", not app.pbar.cv.winfo_manager(),
+          app.pbar.cv.winfo_manager())
     app.alive = False
 
     app.log("测试日志")
