@@ -3,7 +3,7 @@
 一键打包成 exe。
 
 Copyright (C) 2026 柯夜 (sickpoet). 保留所有权利。
-源码：https://github.com/sickpoet/cdisk-cleaner
+源码：https://github.com/sickpoet/SK-cdisk-cleaner
 
 做四件事：
   1. 从主程序读 __version__（版本号的唯一来源，别在别处硬编码）
@@ -33,7 +33,7 @@ DISPLAY_NAME = "C 盘垃圾清理器"
 # exe 文件属性里显示的公司与版权。文件名保持 ASCII，中文只出现在字符串里。
 COMPANY = "柯夜"
 AUTHOR_ID = "sickpoet"      # GitHub 账号，写进文件属性「备注」
-HOMEPAGE = "https://github.com/sickpoet/cdisk-cleaner"
+HOMEPAGE = "https://github.com/sickpoet/SK-cdisk-cleaner"
 COPYRIGHT_HOLDER = "%s (%s)" % (COMPANY, AUTHOR_ID)
 COMMENT = "作者 %s · %s" % (COPYRIGHT_HOLDER, HOMEPAGE)
 MAIN_SCRIPT = "cdisk_cleaner.py"

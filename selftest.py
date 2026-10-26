@@ -3,7 +3,7 @@
 回归自检：路径守卫、扫描与清理、界面组件。
 
 Copyright (C) 2026 柯夜 (sickpoet). 保留所有权利。
-源码：https://github.com/sickpoet/cdisk-cleaner
+源码：https://github.com/sickpoet/SK-cdisk-cleaner
 
     python selftest.py
 
@@ -196,7 +196,7 @@ check("版权串含作者名",
       bool(C.__copyright__) and C.__author__ in C.__copyright__,
       C.__copyright__)
 check("主页指向原仓库",
-      "github.com/sickpoet/cdisk-cleaner" in C.__homepage__, C.__homepage__)
+      "github.com/sickpoet/SK-cdisk-cleaner" in C.__homepage__, C.__homepage__)
 check("指纹非空", bool(C.FINGERPRINT), C.FINGERPRINT)
 
 # 模块文档字符串里嵌的零宽水印。整段复制源码时它会跟着走，

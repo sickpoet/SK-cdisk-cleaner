@@ -163,7 +163,7 @@ python build_exe.py
 ## 作者与出处
 
 - **作者**：柯夜（GitHub: [sickpoet](https://github.com/sickpoet)）
-- **仓库**：https://github.com/sickpoet/cdisk-cleaner
+- **仓库**：https://github.com/sickpoet/SK-cdisk-cleaner
 - **指纹**：`KEYE-CDISK-7F3A91-2026`
 
 作者与出处出现在下面这些地方，跑一遍或截个图就能看到：
